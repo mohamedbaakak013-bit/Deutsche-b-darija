@@ -1,0 +1,6 @@
+{
+  "name": "Deutsch b'Darija (دوتش بالدارجة)",
+  "description": "Interactive, gamified German learning web application for Moroccans from CEFR A1 to B2 with humorous storytelling, bureaucracy simulators, audio, and an AI tutor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
