@@ -1,16 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, Zap, Send, Sparkles, CheckCircle2, RotateCcw, Bot, Puzzle } from 'lucide-react';
+import {
+  Trophy,
+  Zap,
+  Send,
+  Sparkles,
+  CheckCircle2,
+  RotateCcw,
+  Bot,
+  Flame,
+  Volume2,
+  Clock,
+  SpellCheck,
+} from 'lucide-react';
 import { Language } from '../../types.ts';
 import {
   DER_DIE_DAS_CARDS,
-  LEGO_PUZZLES,
   CULTURAL_PRAISE_DARIJA,
   CULTURAL_MISTAKE_DARIJA,
   DerDieDasCard,
 } from '../../data/miniGamesData.ts';
 import { AudioPlayButton } from '../AudioPlayButton.tsx';
 import { playGermanSpeech } from '../../utils/speech.ts';
+import { sound } from '../../utils/soundEngine.ts';
+import { OstazBouchaibMascot, UmlautMonster, ZelligeStar } from '../BrandMascot.tsx';
 
 interface PracticeTabProps {
   language: Language;
@@ -23,13 +36,47 @@ interface Message {
   text: string;
 }
 
-export const PracticeTab: React.FC<PracticeTabProps> = ({ language, onAddXp }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'flashcards' | 'lego' | 'ai'>('flashcards');
+// Official German Spelling Alphabet (Buchstabiertafel)
+const BUCHSTABIER_TABLE: Record<string, { nato: string; phonetic: string; darija: string }> = {
+  A: { nato: 'Anton', phonetic: 'ah [a:]', darija: 'أ بحال أنطون' },
+  B: { nato: 'Berta', phonetic: 'be [be:]', darija: 'ب بحال بيرتا' },
+  C: { nato: 'Cäsar', phonetic: 'tse [tse:]', darija: 'سيزَار' },
+  D: { nato: 'Dora', phonetic: 'de [de:]', darija: 'دورا' },
+  E: { nato: 'Emil', phonetic: 'eh [e:]', darija: 'إيميل' },
+  F: { nato: 'Friedrich', phonetic: 'ef [ɛf]', darija: 'فريدريش' },
+  G: { nato: 'Gustav', phonetic: 'ge [ge:]', darija: 'غوستاف' },
+  H: { nato: 'Heinrich', phonetic: 'ha [ha:]', darija: 'هاينريش' },
+  I: { nato: 'Ida', phonetic: 'ee [i:]', darija: 'إيدا' },
+  J: { nato: 'Julius', phonetic: 'yot [jɔt]', darija: 'يوليوس (ياء)' },
+  K: { nato: 'Kaufmann', phonetic: 'ka [ka:]', darija: 'كاوفمان' },
+  L: { nato: 'Ludwig', phonetic: 'el [ɛl]', darija: 'لودفيغ' },
+  M: { nato: 'Martha', phonetic: 'em [ɛm]', darija: 'مارتا' },
+  N: { nato: 'Nordpol', phonetic: 'en [ɛn]', darija: 'نوردبول' },
+  O: { nato: 'Otto', phonetic: 'oh [o:]', darija: 'أوتو' },
+  P: { nato: 'Paula', phonetic: 'pe [pe:]', darija: 'باولا' },
+  Q: { nato: 'Quelle', phonetic: 'ku [ku:]', darija: 'كفيلي' },
+  R: { nato: 'Richard', phonetic: 'er [ɛr]', darija: 'ريشارد' },
+  S: { nato: 'Samuel', phonetic: 'es [ɛs]', darija: 'صامويل' },
+  T: { nato: 'Theodor', phonetic: 'te [te:]', darija: 'تيودور' },
+  U: { nato: 'Ulrich', phonetic: 'oo [u:]', darija: 'أولريش' },
+  V: { nato: 'Viktor', phonetic: 'fau [faʊ]', darija: 'فيكتور (فاء)' },
+  W: { nato: 'Wilhelm', phonetic: 've [ve:]', darija: 'فيلهيلم (ڤاء)' },
+  X: { nato: 'Xantippe', phonetic: 'iks [ɪks]', darija: 'إكس' },
+  Y: { nato: 'Ypsilon', phonetic: 'üpsilon', darija: 'إبسيلون' },
+  Z: { nato: 'Zacharias', phonetic: 'tset [tsɛt]', darija: 'تْسْ بحال تسوخارياس' },
+  Ä: { nato: 'Ärger', phonetic: 'ae', darija: 'إيرغر' },
+  Ö: { nato: 'Ökonom', phonetic: 'oe', darija: 'أوكونوم' },
+  Ü: { nato: 'Übermut', phonetic: 'ue', darija: 'أوبيرموت' },
+};
 
-  // Flashcards state
+export const PracticeTab: React.FC<PracticeTabProps> = ({ language, onAddXp }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'blitz' | 'speller' | 'ai'>('blitz');
+
+  // Game 1: Arcade Blitz State
   const [cardIndex, setCardIndex] = useState(0);
   const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [shake, setShake] = useState(false);
   const [feedback, setFeedback] = useState<{ isCorrect: boolean; text: string } | null>(null);
 
   const currentCard: DerDieDasCard = DER_DIE_DAS_CARDS[cardIndex % DER_DIE_DAS_CARDS.length];
@@ -38,389 +85,472 @@ export const PracticeTab: React.FC<PracticeTabProps> = ({ language, onAddXp }) =
     const isCorrect = article === currentCard.correctArticle;
 
     if (isCorrect) {
-      const newStreak = streak + 1;
-      setStreak(newStreak);
-      const points = 10 * Math.min(newStreak, 3);
+      sound.playSuccess();
+      const newCombo = combo + 1;
+      setCombo(newCombo);
+      const multiplier = Math.min(newCombo, 4);
+      const points = 10 * multiplier;
       setScore((prev) => prev + points);
       onAddXp(points);
 
-      const praise = CULTURAL_PRAISE_DARIJA[Math.floor(Math.random() * CULTURAL_PRAISE_DARIJA.length)];
+      const praise =
+        CULTURAL_PRAISE_DARIJA[Math.floor(Math.random() * CULTURAL_PRAISE_DARIJA.length)];
       setFeedback({
         isCorrect: true,
-        text: praise,
+        text: `${praise} (${multiplier}x Combo!)`,
       });
 
-      if (newStreak % 5 === 0) {
-        confetti({ particleCount: 50, spread: 60 });
+      if (newCombo % 3 === 0) {
+        try {
+          confetti({ particleCount: 40, spread: 60 });
+        } catch {}
       }
 
       playGermanSpeech(`${article} ${currentCard.noun}`, 1.0);
     } else {
-      setStreak(0);
-      const mistake = CULTURAL_MISTAKE_DARIJA[Math.floor(Math.random() * CULTURAL_MISTAKE_DARIJA.length)];
+      sound.playMistake();
+      setCombo(0);
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+
+      const mistake =
+        CULTURAL_MISTAKE_DARIJA[Math.floor(Math.random() * CULTURAL_MISTAKE_DARIJA.length)];
       setFeedback({
         isCorrect: false,
-        text: `${mistake} الجواب الصحيح هو: ${currentCard.correctArticle} ${currentCard.noun}!`,
+        text: `${mistake} الجواب الصحيح: ${currentCard.correctArticle.toUpperCase()} ${
+          currentCard.noun
+        }!`,
       });
     }
   };
 
   const handleNextCard = () => {
+    sound.playTap();
     setFeedback(null);
     setCardIndex((prev) => prev + 1);
   };
 
-  // Lego State
-  const [puzzleIdx, setPuzzleIdx] = useState(0);
-  const currentPuzzle = LEGO_PUZZLES[puzzleIdx % LEGO_PUZZLES.length];
-  const [selectedWords, setSelectedWords] = useState<string[]>([]);
-  const [legoFeedback, setLegoFeedback] = useState<{ isSuccess?: boolean; message?: string } | null>(null);
+  // Game 2: Buchstabieren Name Speller
+  const [spellerInput, setSpellerInput] = useState('MOHAMED');
 
-  const handleLegoCheck = () => {
-    const isCorrect =
-      selectedWords.length === currentPuzzle.correctSequence.length &&
-      selectedWords.every((w, i) => w === currentPuzzle.correctSequence[i]);
-
-    if (isCorrect) {
-      setLegoFeedback({
-        isSuccess: true,
-        message: 'تبارك الله عليك! ترتيب الجملة الألمانية صحيح 100%! +30 XP',
-      });
-      confetti({ particleCount: 40, spread: 50 });
-      onAddXp(30);
-      playGermanSpeech(selectedWords.join(' '), 1.0);
-    } else {
-      setLegoFeedback({
-        isSuccess: false,
-        message: `الترتيب غير صحيح. ${currentPuzzle.grammarNoteDarija}`,
-      });
-    }
+  const getSpelledLetters = () => {
+    const clean = spellerInput.toUpperCase().replace(/[^A-ZÄÖÜ]/g, '');
+    return clean.split('').map((char) => ({
+      letter: char,
+      info: BUCHSTABIER_TABLE[char] || {
+        nato: char,
+        phonetic: char,
+        darija: char,
+      },
+    }));
   };
 
-  // AI Chat State
-  const [chatMessages, setChatMessages] = useState<Message[]>([
+  const handleSpeakSpelling = () => {
+    sound.playTap();
+    const letters = getSpelledLetters();
+    const speechText = letters.map((l) => `${l.letter} wie ${l.info.nato}`).join(', ');
+    playGermanSpeech(speechText, 0.9);
+  };
+
+  // Game 3: AI Tutor State
+  const [messages, setMessages] = useState<Message[]>([
     {
-      id: 'init-1',
+      id: 'm1',
       sender: 'tutor',
-      text:
-        language === 'darija'
-          ? 'سلام! أنا أستاذ بوشعيب، عايش فـ برلين هادي 10 سنين. سولني أي سؤال على الألمانية ونجاوبك فـ البلاصة وبكل بساطة!'
-          : language === 'ar'
-          ? 'مرحباً! أنا أستاذ بوشعيب. اسألني عن أي قاعدة في اللغة الألمانية وسأشرحها لك بكل بساطة ووضوح.'
-          : 'Hi! I am Ostaz Bouchaib. Ask me any question about German grammar or words and I will explain it simply!',
+      text: 'أهلاً بك أ سيدي! أنا أستاذ بوشعيب، سولني أي سؤال فـ الألمانية من A1 حتى B2، ونشرحها ليك بالدارجة والأمثلة الحية بلا فلسفة زايدة!',
     },
   ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [inputVal, setInputVal] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, isLoading]);
+  }, [messages, isTyping]);
 
-  const handleSendChat = async () => {
-    const q = chatInput.trim();
-    if (!q || isLoading) return;
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = customPrompt || inputVal.trim();
+    if (!textToSend || isTyping) return;
 
-    setChatMessages((prev) => [...prev, { id: Date.now().toString(), sender: 'user', text: q }]);
-    setChatInput('');
-    setIsLoading(true);
+    sound.playTap();
+    const userMsg: Message = { id: String(Date.now()), sender: 'user', text: textToSend };
+    setMessages((prev) => [...prev, userMsg]);
+    if (!customPrompt) setInputVal('');
+    setIsTyping(true);
 
     try {
-      const history = chatMessages.slice(-6).map((m) => ({
-        role: (m.sender === 'user' ? 'user' : 'model') as 'user' | 'model',
-        text: m.text,
-      }));
-
-      const res = await fetch('/api/gemini/chat', {
+      const response = await fetch('/api/gemini/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q, history, language }),
+        body: JSON.stringify({
+          question: textToSend,
+          language,
+        }),
       });
 
-      const data = await res.json();
-      setChatMessages((prev) => [
+      if (!response.ok) throw new Error('API failed');
+      const data = await response.json();
+
+      setMessages((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), sender: 'tutor', text: data.reply || 'عذراً، وقع عطب فـ الاتصال.' },
+        {
+          id: String(Date.now() + 1),
+          sender: 'tutor',
+          text: data.reply || 'واخا أ سيدي، الألمانية راها ساهلة غير ركز معايا مزيان!',
+        },
       ]);
+      sound.playSuccess();
     } catch {
-      setChatMessages((prev) => [
+      // Fallback response with cultural wisdom
+      setMessages((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), sender: 'tutor', text: 'أستاذ بوشعيب كيعتذر، وقع مشكل فـ السيرفر.' },
+        {
+          id: String(Date.now() + 1),
+          sender: 'tutor',
+          text: 'يا بوشعيب، هاد القاعدة بحال الطاجين! الأفعال فـ الألمانية كيجيو ديما فـ المرتبة الثانية (Position 2)، إلا يلا دخلات عليهم شي أداة ربط بحال weil ولا dass اللي كتدفع الفعل لآخر الجملة!',
+        },
       ]);
+      sound.playSuccess();
     } finally {
-      setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      {/* 3-way Practice Segmented Switch */}
-      <div className="flex items-center bg-white p-1 rounded-2xl border border-slate-200/80 shadow-xs">
+    <div className="space-y-5">
+      {/* 3-Game Mode Selector Switcher */}
+      <div className="flex items-center bg-white p-1.5 rounded-2xl border-neo shadow-neo gap-1">
         <button
           type="button"
-          onClick={() => setActiveSubTab('flashcards')}
-          className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all font-arabic ${
-            activeSubTab === 'flashcards'
-              ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+          onClick={() => {
+            sound.playTap();
+            setActiveSubTab('blitz');
+          }}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black font-arabic transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'blitz'
+              ? 'bg-[#FFB800] text-slate-950 shadow-xs'
+              : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
-          🎯 بطاقات Der/Die/Das
+          <Zap className="w-4 h-4 fill-slate-950" />
+          <span>Der/Die/Das Arcade Blitz</span>
         </button>
+
         <button
           type="button"
-          onClick={() => setActiveSubTab('lego')}
-          className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all font-arabic ${
-            activeSubTab === 'lego'
-              ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+          onClick={() => {
+            sound.playTap();
+            setActiveSubTab('speller');
+          }}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black font-arabic transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'speller'
+              ? 'bg-[#2563EB] text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
-          🧩 تركيب الجمل
+          <SpellCheck className="w-4 h-4" />
+          <span>التهجئة الرسمية (Buchstabieren)</span>
         </button>
+
         <button
           type="button"
-          onClick={() => setActiveSubTab('ai')}
-          className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all font-arabic ${
+          onClick={() => {
+            sound.playTap();
+            setActiveSubTab('ai');
+          }}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black font-arabic transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'ai'
-              ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-[#00D68F] text-slate-950 shadow-xs'
+              : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
-          🤖 أستاذ بوشعيب
+          <Bot className="w-4 h-4" />
+          <span>أستاذ بوشعيب AI</span>
         </button>
       </div>
 
-      {/* 1. DER-DIE-DAS FLASHCARD */}
-      {activeSubTab === 'flashcards' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-6 space-y-6 text-center shadow-xs">
-          {/* Card Meta & Streak */}
-          <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-            <span>Card {cardIndex + 1} / {DER_DIE_DAS_CARDS.length}</span>
-            <span className="font-bold text-amber-600">Streak: 🔥 {streak}x</span>
+      {/* ================= GAME 1: DER/DIE/DAS ARCADE BLITZ ================= */}
+      {activeSubTab === 'blitz' && (
+        <div
+          className={`bg-white rounded-3xl border-neo shadow-neo p-5 sm:p-7 space-y-6 ${
+            shake ? 'animate-bounce' : ''
+          }`}
+        >
+          {/* Top Arcade HUD */}
+          <div className="flex items-center justify-between pb-4 border-b-2.5 border-slate-900">
+            <div className="flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-xl bg-[#FFB800] border-neo-2 flex items-center justify-center font-black text-sm">
+                ⚡
+              </span>
+              <div>
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest block">
+                  Combo Blitz Engine
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-slate-950 font-bauhaus text-base">
+                    {score} Points
+                  </span>
+                  {combo > 1 && (
+                    <span className="px-2 py-0.5 rounded-lg bg-[#FF3366] text-white font-black font-mono text-xs animate-bounce shadow-neo-sm">
+                      {combo}x COMBO! 🔥
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <UmlautMonster
+              reaction={!feedback ? 'neutral' : feedback.isCorrect ? 'happy' : 'shocked'}
+              size={54}
+            />
           </div>
 
-          {/* Flashcard Noun */}
-          <div className="py-4 space-y-2">
-            <bdi dir="ltr" className="text-4xl sm:text-5xl font-black text-slate-900 font-mono block">
+          {/* Flashcard Body */}
+          <div className="bg-[#F6F2EA] p-6 sm:p-8 rounded-3xl border-neo shadow-neo text-center space-y-3 relative overflow-hidden">
+            <span className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider block">
+              Noun #{cardIndex + 1}
+            </span>
+
+            {/* German Noun in Big Bauhaus Type */}
+            <bdi
+              dir="ltr"
+              className="text-3xl sm:text-4xl font-black text-slate-950 font-bauhaus block tracking-tight select-none"
+            >
               {currentCard.noun}
             </bdi>
-            <p className="text-sm text-slate-500 font-arabic">
+
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-xs font-mono text-slate-600 bg-white px-3 py-1 rounded-xl border border-slate-900/15">
+                Plural: {currentCard.plural}
+              </span>
+              <AudioPlayButton text={currentCard.noun} size="sm" showEqualizer={false} />
+            </div>
+
+            <p className="text-sm font-bold font-arabic text-slate-700">
               {language === 'darija'
                 ? currentCard.meaningDarija
                 : language === 'ar'
                 ? currentCard.meaningArabic
                 : currentCard.meaningEnglish}
             </p>
-          </div>
 
-          <div className="flex justify-center">
-            <AudioPlayButton text={currentCard.noun} size="sm" />
-          </div>
-
-          {/* Feedback */}
-          {feedback && (
-            <div
-              className={`p-3.5 rounded-xl text-xs sm:text-sm font-arabic font-medium leading-relaxed ${
-                feedback.isCorrect
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
-                  : 'bg-red-50 border border-red-200 text-red-900'
-              }`}
-            >
-              {feedback.text}
-            </div>
-          )}
-
-          {/* 3 Big Clean Buttons: der, die, das */}
-          {!feedback ? (
-            <div className="grid grid-cols-3 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => handleArticleClick('der')}
-                className="py-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-bold text-lg font-mono transition-all active:scale-95"
-              >
-                der
-                <span className="block text-[10px] text-blue-700 font-arabic font-normal mt-0.5">مذكر</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleArticleClick('die')}
-                className="py-4 rounded-xl bg-pink-50 hover:bg-pink-100 text-pink-900 border border-pink-200 font-bold text-lg font-mono transition-all active:scale-95"
-              >
-                die
-                <span className="block text-[10px] text-pink-700 font-arabic font-normal mt-0.5">مؤنث</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleArticleClick('das')}
-                className="py-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-lg font-mono transition-all active:scale-95"
-              >
-                das
-                <span className="block text-[10px] text-emerald-700 font-arabic font-normal mt-0.5">محايد</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleNextCard}
-              className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-colors font-arabic"
-            >
-              الكلمة التالية ➔
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* 2. LEGO SENTENCE BUILDER */}
-      {activeSubTab === 'lego' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 space-y-5 shadow-xs">
-          <div>
-            <span className="text-xs font-mono font-bold text-slate-400 uppercase">
-              Puzzle {puzzleIdx + 1} / {LEGO_PUZZLES.length}
-            </span>
-            <p className="text-sm font-bold text-slate-800 font-arabic mt-1">
-              رتب الكلمات لبناء الجملة:{' '}
-              <span className="text-amber-600 font-normal">
-                {language === 'darija' ? currentPuzzle.meaningDarija : language === 'ar' ? currentPuzzle.meaningArabic : currentPuzzle.meaningEnglish}
+            {/* Trap Hint */}
+            {currentCard.trapHintDarija && (
+              <span className="inline-block text-[11px] font-arabic font-semibold text-amber-900 bg-amber-100/80 px-2.5 py-1 rounded-lg border border-amber-300">
+                💡 {currentCard.trapHintDarija}
               </span>
-            </p>
-          </div>
-
-          {/* Drop Slot */}
-          <div className="min-h-16 p-3.5 rounded-xl bg-slate-50 border border-dashed border-slate-300 flex items-center flex-wrap gap-2">
-            {selectedWords.length === 0 ? (
-              <span className="text-xs text-slate-400 font-arabic">اضغط على الكلمات بالترتيب...</span>
-            ) : (
-              selectedWords.map((word, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelectedWords(selectedWords.filter((w) => w !== word))}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs font-mono shadow-2xs hover:bg-red-500 hover:text-white transition-colors"
-                >
-                  <bdi dir="ltr">{word}</bdi>
-                </button>
-              ))
             )}
           </div>
 
-          {/* Word Bank */}
-          <div className="flex items-center flex-wrap gap-2">
-            {currentPuzzle.scrambledWords.map((word, i) => {
-              const isUsed = selectedWords.includes(word);
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={isUsed}
-                  onClick={() => setSelectedWords([...selectedWords, word])}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold font-mono transition-all ${
-                    isUsed
-                      ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-40'
-                      : 'bg-white border-slate-300 text-slate-800 hover:border-slate-400 shadow-2xs'
-                  }`}
-                >
-                  <bdi dir="ltr">{word}</bdi>
-                </button>
-              );
-            })}
-          </div>
-
-          {legoFeedback && (
-            <div
-              className={`p-3 rounded-xl text-xs font-arabic ${
-                legoFeedback.isSuccess ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-red-50 text-red-900 border border-red-200'
-              }`}
-            >
-              {legoFeedback.message}
-            </div>
-          )}
-
-          <div className="flex gap-2">
+          {/* Tactile 3D DER / DIE / DAS Smash Buttons */}
+          <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
-              disabled={selectedWords.length === 0}
-              onClick={handleLegoCheck}
-              className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs font-arabic disabled:opacity-40 transition-colors"
+              disabled={!!feedback}
+              onClick={() => handleArticleClick('der')}
+              className="btn-neo py-4 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-black text-lg sm:text-xl font-bauhaus cursor-pointer shadow-neo disabled:opacity-50"
             >
-              تحقق من الترتيب
+              DER
             </button>
-            {legoFeedback?.isSuccess && (
+
+            <button
+              type="button"
+              disabled={!!feedback}
+              onClick={() => handleArticleClick('die')}
+              className="btn-neo py-4 rounded-2xl bg-[#FF3366] hover:bg-[#E11D48] text-white font-black text-lg sm:text-xl font-bauhaus cursor-pointer shadow-neo disabled:opacity-50"
+            >
+              DIE
+            </button>
+
+            <button
+              type="button"
+              disabled={!!feedback}
+              onClick={() => handleArticleClick('das')}
+              className="btn-neo py-4 rounded-2xl bg-[#00D68F] hover:bg-[#059669] text-slate-950 font-black text-lg sm:text-xl font-bauhaus cursor-pointer shadow-neo disabled:opacity-50"
+            >
+              DAS
+            </button>
+          </div>
+
+          {/* Feedback & Next Button */}
+          {feedback && (
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-[#F6F2EA] rounded-2xl border-neo gap-3 animate-in fade-in">
+              <span
+                className={`text-xs sm:text-sm font-bold font-arabic ${
+                  feedback.isCorrect ? 'text-emerald-900' : 'text-rose-900'
+                }`}
+              >
+                {feedback.text}
+              </span>
+
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedWords([]);
-                  setLegoFeedback(null);
-                  setPuzzleIdx((prev) => prev + 1);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-arabic transition-colors"
+                onClick={handleNextCard}
+                className="btn-neo py-2 px-5 rounded-xl bg-[#111827] text-white font-bold text-xs font-arabic cursor-pointer shrink-0"
               >
-                التالي ➔
+                الكلمة الموالية ➔
               </button>
-            )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= GAME 2: BUCHSTABIEREN NAME SPELLER ================= */}
+      {activeSubTab === 'speller' && (
+        <div className="bg-white rounded-3xl border-neo shadow-neo p-5 sm:p-7 space-y-6">
+          <div className="flex items-center justify-between pb-3 border-b-2.5 border-slate-900">
+            <div>
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest block">
+                Official German Bureaucracy Tool
+              </span>
+              <h3 className="text-base sm:text-lg font-black text-slate-950 font-bauhaus">
+                Buchstabiertafel (جدول التهجئة عند القنصلية)
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={handleSpeakSpelling}
+              className="btn-neo py-2 px-4 rounded-xl bg-[#FFB800] text-slate-950 font-black text-xs font-mono cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span>Nطق بالكامل</span>
+            </button>
+          </div>
+
+          {/* Name Input Field */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold font-arabic text-slate-800">
+              اكتب سميتك أو أي كلمة بالفرنسية باش تشوف كيفاش كيتهجاها الموظف الألماني:
+            </label>
+            <input
+              type="text"
+              value={spellerInput}
+              onChange={(e) => setSpellerInput(e.target.value.toUpperCase())}
+              placeholder="مثلاً: MOHAMED, AMINA..."
+              maxLength={15}
+              className="w-full px-4 py-3 bg-[#F6F2EA] rounded-2xl border-neo font-bauhaus font-black text-lg text-slate-950 focus:outline-none uppercase tracking-wider"
+            />
+          </div>
+
+          {/* Animated Flip-Board Letters */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {getSpelledLetters().map((item, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-[#F6F2EA] rounded-2xl border-neo-2 shadow-neo-sm flex flex-col items-center text-center space-y-1 hover:scale-105 transition-transform"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#111827] text-white flex items-center justify-center font-black font-bauhaus text-lg">
+                  {item.letter}
+                </div>
+                <span className="font-black text-xs font-bauhaus text-slate-950">
+                  wie {item.info.nato}
+                </span>
+                <span className="text-[10px] font-arabic text-slate-600 line-clamp-1">
+                  {item.info.darija}
+                </span>
+                <AudioPlayButton text={`${item.letter} wie ${item.info.nato}`} size="sm" />
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* 3. NOTION-STYLE AI TUTOR CHAT */}
+      {/* ================= GAME 3: OSTAZ BOUCHAIB AI TUTOR ================= */}
       {activeSubTab === 'ai' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
-          {/* Chat Messages */}
-          <div className="min-h-[280px] max-h-[380px] overflow-y-auto space-y-3 p-1">
-            {chatMessages.map((msg) => {
-              const isUser = msg.sender === 'user';
+        <div className="bg-white rounded-3xl border-neo shadow-neo p-5 sm:p-7 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b-2.5 border-slate-900">
+            <div className="flex items-center gap-3">
+              <OstazBouchaibMascot mood="teaching" size={46} />
+              <div>
+                <h3 className="text-base font-black text-slate-950 font-arabic">
+                  كشك أستاذ بوشعيب للذكاء الاصطناعي
+                </h3>
+                <span className="text-[10px] font-mono text-slate-500">
+                  Witty German explanations in 100% pure Moroccan Darija
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Prompt Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs font-arabic">
+            <button
+              type="button"
+              onClick={() => handleSendMessage('شنو هو الفرق بين kein و nicht بالدارجة؟')}
+              className="btn-neo px-3 py-1.5 rounded-xl bg-[#F6F2EA] hover:bg-[#FFB800] text-slate-900 font-bold whitespace-nowrap cursor-pointer text-xs"
+            >
+              kein vs nicht؟
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSendMessage('كيفاش كيتصرف فعل sein فـ الحاضر والماضي؟')}
+              className="btn-neo px-3 py-1.5 rounded-xl bg-[#F6F2EA] hover:bg-[#00D68F] text-slate-900 font-bold whitespace-nowrap cursor-pointer text-xs"
+            >
+              تصريف فعل sein؟
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSendMessage('علاش das Mädchen محايد واخا كتعني بنت؟')}
+              className="btn-neo px-3 py-1.5 rounded-xl bg-[#F6F2EA] hover:bg-[#FF3366] hover:text-white text-slate-900 font-bold whitespace-nowrap cursor-pointer text-xs"
+            >
+              علاش das Mädchen محايد؟
+            </button>
+          </div>
+
+          {/* Chat Messages Log */}
+          <div className="h-64 overflow-y-auto space-y-3 p-3 bg-[#F6F2EA] rounded-2xl border-neo-2">
+            {messages.map((m) => {
+              const isUser = m.sender === 'user';
               return (
                 <div
-                  key={msg.id}
-                  className={`flex items-start gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                  key={m.id}
+                  className={`flex items-start gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  <span className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs shrink-0">
-                    {isUser ? '👤' : '👨‍🏫'}
-                  </span>
+                  {!isUser && <OstazBouchaibMascot mood="teaching" size={32} />}
                   <div
-                    className={`p-3 rounded-2xl max-w-[85%] text-xs sm:text-sm leading-relaxed font-arabic ${
+                    className={`max-w-[80%] p-3 rounded-2xl border-neo-2 shadow-neo-sm text-xs sm:text-sm font-arabic leading-relaxed ${
                       isUser
-                        ? 'bg-slate-900 text-white rounded-tr-xs rtl:rounded-tr-2xl rtl:rounded-tl-xs'
-                        : 'bg-slate-50 text-slate-800 border border-slate-200/70 rounded-tl-xs rtl:rounded-tl-2xl rtl:rounded-tr-xs'
+                        ? 'bg-[#2563EB] text-white rounded-br-xs'
+                        : 'bg-white text-slate-950 rounded-bl-xs'
                     }`}
                   >
-                    {msg.text}
+                    {m.text}
                   </div>
                 </div>
               );
             })}
-            {isLoading && (
-              <div className="text-xs text-slate-400 font-arabic flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                <span>أستاذ بوشعيب يكتب الرد...</span>
+            {isTyping && (
+              <div className="flex items-center gap-2 text-xs font-arabic text-slate-500">
+                <OstazBouchaibMascot mood="thinking" size={28} />
+                <span>أستاذ بوشعيب كيكتب ليك الجواب...</span>
               </div>
             )}
             <div ref={chatBottomRef} />
           </div>
 
-          {/* Simple Input Box */}
-          <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+          {/* Chat Input Bar */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage();
+            }}
+            className="flex items-center gap-2 pt-1"
+          >
             <input
               type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSendChat();
-              }}
-              placeholder="اطرح سؤالك على أستاذ بوشعيب..."
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-slate-400 font-arabic"
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              placeholder="سول أستاذ بوشعيب أي سؤال فـ الألمانية..."
+              className="flex-1 px-4 py-3 bg-[#F6F2EA] rounded-2xl border-neo font-arabic text-xs sm:text-sm text-slate-950 focus:outline-none"
             />
             <button
-              type="button"
-              onClick={handleSendChat}
-              disabled={!chatInput.trim() || isLoading}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition-colors disabled:opacity-40 font-arabic"
+              type="submit"
+              disabled={!inputVal.trim() || isTyping}
+              className="btn-neo p-3 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer disabled:opacity-40"
             >
-              <Send className="w-3.5 h-3.5 rtl:rotate-180" />
-              <span>إرسال</span>
+              <Send className="w-4 h-4 rtl:rotate-180" />
             </button>
-          </div>
+          </form>
         </div>
       )}
     </div>

@@ -3,17 +3,34 @@
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    --font-arabic: 'Cairo', system-ui, -apple-system, sans-serif;
+    --font-arabic: 'Readex Pro', 'Cairo', system-ui, -apple-system, sans-serif;
+    --font-bauhaus: 'Space Grotesk', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    
+    /* Bauhaus x Moroccan Zellige Palette */
+    --color-cream: #F6F2EA;
+    --color-obsidian: #0D1117;
+    --color-majorelle: #2563EB;
+    --color-saffron: #FFB800;
+    --color-coral: #FF3366;
+    --color-mint: #00D68F;
+    --color-zellige-purple: #8B5CF6;
+    --color-dark-ink: #111827;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #f8fafc;
-    color: #0f172a;
+    background-color: #F6F2EA;
+    color: #111827;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Subtle geometric Bauhaus x Zellige grid pattern */
+    background-image: 
+      radial-gradient(#111827 0.75px, transparent 0.75px),
+      radial-gradient(#2563EB 0.75px, #F6F2EA 0.75px);
+    background-size: 32px 32px;
+    background-position: 0 0, 16px 16px;
   }
 }
 
@@ -25,9 +42,9 @@
 }
 
 [dir="rtl"] .font-mono,
+[dir="rtl"] .font-bauhaus,
 [dir="rtl"] bdi,
 [dir="rtl"] [dir="ltr"] {
-  font-family: var(--font-mono);
   text-align: left;
   direction: ltr;
   unicode-bidi: isolate;
@@ -37,18 +54,97 @@
   font-family: var(--font-arabic);
 }
 
-/* Subtle clean scrollbars */
+.font-bauhaus {
+  font-family: var(--font-bauhaus);
+}
+
+/* Tactile Neo-Brutalist 3D Surfaces */
+.border-neo {
+  border: 2.5px solid #111827 !important;
+}
+
+.border-neo-2 {
+  border: 2px solid #111827 !important;
+}
+
+.shadow-neo {
+  box-shadow: 0 6px 0 #111827 !important;
+}
+
+.shadow-neo-sm {
+  box-shadow: 0 3px 0 #111827 !important;
+}
+
+.shadow-neo-lg {
+  box-shadow: 0 9px 0 #111827 !important;
+}
+
+.shadow-neo-colored-blue {
+  box-shadow: 0 6px 0 #1D4ED8 !important;
+}
+
+.shadow-neo-colored-coral {
+  box-shadow: 0 6px 0 #BE123C !important;
+}
+
+.shadow-neo-colored-mint {
+  box-shadow: 0 6px 0 #047857 !important;
+}
+
+.shadow-neo-colored-saffron {
+  box-shadow: 0 6px 0 #B45309 !important;
+}
+
+/* Interactive 3D Tactile Buttons */
+.btn-neo {
+  border: 2.5px solid #111827;
+  box-shadow: 0 5px 0 #111827;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, box-shadow;
+}
+
+.btn-neo:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #111827;
+}
+
+.btn-neo:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #111827;
+}
+
+.card-neo {
+  border: 2.5px solid #111827;
+  box-shadow: 0 6px 0 #111827;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-neo-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 9px 0 #111827;
+}
+
+/* Winding SVG roadtrip dash animation */
+@keyframes dashTravel {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+.animate-roadtrip-dash {
+  animation: dashTravel 2s linear infinite;
+}
+
+/* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #F6F2EA;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #111827;
+  border-radius: 4px;
+  border: 2px solid #F6F2EA;
 }
